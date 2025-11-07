@@ -23,6 +23,29 @@ option(STATIC_C "Static link C runtime" OFF)
 option(PIE "Position independent executable" 0)
 option(ATOMIC_U64 "Support atomic uint64" ON)
 
+# Configure Visual Studio runtime library based on static options
+if(WIN32 AND MSVC)
+    if(STATIC_C OR STATIC_CPP)
+        # Use static runtime library (/MT) for static builds
+        set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+        # Also set compiler flags for older CMake versions
+        foreach(flag_var
+            CMAKE_C_FLAGS CMAKE_C_FLAGS_DEBUG CMAKE_C_FLAGS_RELEASE
+            CMAKE_C_FLAGS_MINSIZEREL CMAKE_C_FLAGS_RELWITHDEBINFO
+            CMAKE_CXX_FLAGS CMAKE_CXX_FLAGS_DEBUG CMAKE_CXX_FLAGS_RELEASE
+            CMAKE_CXX_FLAGS_MINSIZEREL CMAKE_CXX_FLAGS_RELWITHDEBINFO)
+            if(${flag_var} MATCHES "/MD")
+                string(REGEX REPLACE "/MD" "/MT" ${flag_var} "${${flag_var}}")
+            endif()
+        endforeach()
+        message(STATUS "Using static runtime library (/MT) for static builds")
+    else()
+        # Use dynamic runtime library (/MD) for dynamic builds  
+        set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreadedDLL$<$<CONFIG:Debug>:Debug>")
+        message(STATUS "Using dynamic runtime library (/MD) for dynamic builds")
+    endif()
+endif()
+
 # Platform detection
 if(WIN32)
     set(BZIP2_DEFAULT 1)
@@ -221,7 +244,6 @@ endif()
 
 # Source files
 set(HPATCH_SOURCES
-    hpatchz.c
     file_for_patch.c
     libHDiffPatch/HPatch/patch.c
 )
@@ -527,8 +549,107 @@ if(ZLIB EQUAL 1 AND LDEF EQUAL 1)
         endif()
     endif()
 else()
+    # For static builds, include source files directly to avoid DLL dependencies
     add_executable(hpatchz hpatchz.c)
     add_executable(hdiffz hdiffz.cpp)
+    
+    # Add source files directly for static linking when using source builds
+    if(ZLIB EQUAL 1)
+        target_sources(hpatchz PRIVATE 
+            ${ZLIB_PATH}/adler32.c
+            ${ZLIB_PATH}/crc32.c
+            ${ZLIB_PATH}/inffast.c
+            ${ZLIB_PATH}/inflate.c
+            ${ZLIB_PATH}/inftrees.c
+            ${ZLIB_PATH}/zutil.c
+        )
+        target_sources(hdiffz PRIVATE 
+            ${ZLIB_PATH}/adler32.c
+            ${ZLIB_PATH}/crc32.c
+            ${ZLIB_PATH}/inffast.c
+            ${ZLIB_PATH}/inflate.c
+            ${ZLIB_PATH}/inftrees.c
+            ${ZLIB_PATH}/trees.c
+            ${ZLIB_PATH}/zutil.c
+        )
+    endif()
+    
+    if(BZIP2 EQUAL 1)
+        target_sources(hpatchz PRIVATE 
+            ${BZIP2_PATH}/blocksort.c
+            ${BZIP2_PATH}/bzlib.c
+            ${BZIP2_PATH}/compress.c
+            ${BZIP2_PATH}/crctable.c
+            ${BZIP2_PATH}/decompress.c
+            ${BZIP2_PATH}/huffman.c
+            ${BZIP2_PATH}/randtable.c
+        )
+        target_sources(hdiffz PRIVATE 
+            ${BZIP2_PATH}/blocksort.c
+            ${BZIP2_PATH}/bzlib.c
+            ${BZIP2_PATH}/compress.c
+            ${BZIP2_PATH}/crctable.c
+            ${BZIP2_PATH}/decompress.c
+            ${BZIP2_PATH}/huffman.c
+            ${BZIP2_PATH}/randtable.c
+        )
+    endif()
+    
+    if(ZSTD EQUAL 1)
+        target_sources(hpatchz PRIVATE 
+            ${ZSTD_PATH}/common/debug.c
+            ${ZSTD_PATH}/common/entropy_common.c
+            ${ZSTD_PATH}/common/error_private.c
+            ${ZSTD_PATH}/common/fse_decompress.c
+            ${ZSTD_PATH}/common/xxhash.c
+            ${ZSTD_PATH}/common/zstd_common.c
+            ${ZSTD_PATH}/decompress/huf_decompress.c
+            ${ZSTD_PATH}/decompress/zstd_ddict.c
+            ${ZSTD_PATH}/decompress/zstd_decompress.c
+            ${ZSTD_PATH}/decompress/zstd_decompress_block.c
+        )
+        target_sources(hdiffz PRIVATE 
+            ${ZSTD_PATH}/common/debug.c
+            ${ZSTD_PATH}/common/entropy_common.c
+            ${ZSTD_PATH}/common/error_private.c
+            ${ZSTD_PATH}/common/fse_decompress.c
+            ${ZSTD_PATH}/common/xxhash.c
+            ${ZSTD_PATH}/common/zstd_common.c
+            ${ZSTD_PATH}/decompress/huf_decompress.c
+            ${ZSTD_PATH}/decompress/zstd_ddict.c
+            ${ZSTD_PATH}/decompress/zstd_decompress.c
+            ${ZSTD_PATH}/decompress/zstd_decompress_block.c
+            ${ZSTD_PATH}/compress/fse_compress.c
+            ${ZSTD_PATH}/compress/hist.c
+            ${ZSTD_PATH}/compress/huf_compress.c
+            ${ZSTD_PATH}/compress/zstd_compress.c
+            ${ZSTD_PATH}/compress/zstd_compress_literals.c
+            ${ZSTD_PATH}/compress/zstd_compress_sequences.c
+            ${ZSTD_PATH}/compress/zstd_compress_superblock.c
+            ${ZSTD_PATH}/compress/zstd_preSplit.c
+            ${ZSTD_PATH}/compress/zstd_double_fast.c
+            ${ZSTD_PATH}/compress/zstd_fast.c
+            ${ZSTD_PATH}/compress/zstd_lazy.c
+            ${ZSTD_PATH}/compress/zstd_ldm.c
+            ${ZSTD_PATH}/compress/zstd_opt.c
+        )
+        if(MT)
+            target_sources(hpatchz PRIVATE
+                ${ZSTD_PATH}/common/pool.c
+                ${ZSTD_PATH}/common/threading.c
+                ${ZSTD_PATH}/compress/zstdmt_compress.c
+            )
+            target_sources(hdiffz PRIVATE
+                ${ZSTD_PATH}/common/pool.c
+                ${ZSTD_PATH}/common/threading.c
+                ${ZSTD_PATH}/compress/zstdmt_compress.c
+            )
+        endif()
+    endif()
+    
+    if(VCD)
+        target_sources(hdiffz PRIVATE vcdiff_wrapper/vcdiff_wrapper.cpp vcdiff_wrapper/vcpatch_wrapper.c)
+    endif()
 endif()
 add_executable(unit_test ${UNIT_TEST_SOURCES})
 
@@ -541,6 +662,7 @@ if(ZLIB EQUAL 2)
     target_link_libraries(hdiffz ZLIB::ZLIB)
 endif()
 
+# Only link system libraries for BZIP2 and ZSTD
 if(BZIP2 EQUAL 2)
     target_link_libraries(hpatchz BZip2::BZip2)
     target_link_libraries(hdiffpatch BZip2::BZip2)
@@ -559,7 +681,7 @@ if(LZMA GREATER 0)
     target_link_libraries(hdiffz lzma)
 endif()
 
-if(LDEF EQUAL 1)
+if(LDEF EQUAL 2)
     target_link_libraries(hpatchz libdeflate_static)
     target_link_libraries(hdiffpatch libdeflate_static)
     target_link_libraries(hdiffz libdeflate_static)
@@ -574,12 +696,12 @@ if(MT)
     target_link_libraries(unit_test Threads::Threads)
 endif()
 
-if(STATIC_CPP)
+if(STATIC_CPP AND NOT WIN32)
     target_link_libraries(hdiffz -static-libstdc++)
     target_link_libraries(unit_test -static-libstdc++)
 endif()
 
-if(STATIC_C)
+if(STATIC_C AND NOT WIN32)
     target_link_libraries(hpatchz -static)
     target_link_libraries(hdiffz -static)
     target_link_libraries(unit_test -static)
