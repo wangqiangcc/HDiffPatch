@@ -30,7 +30,7 @@ cd build_static
 
 REM Configure with CMake
 echo Configuring project with CMake...
-cmake .. -G "Visual Studio 16 2019" -A x64 -DMT=ON  -DSTATIC_CPP=ON -DSTATIC_C=ON -DZLIB=1 -DBZIP2=1 -DZSTD=1 -DLDEF=1
+cmake .. -G "Visual Studio 16 2019" -A x64 -DMT=ON  -DSTATIC_CPP=ON -DSTATIC_C=ON -DZLIB=1 -DBZIP2=1 -DZSTD=1
 
 if %errorlevel% neq 0 (
     echo.
