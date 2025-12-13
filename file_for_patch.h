@@ -81,7 +81,7 @@ extern "C" {
 
 typedef unsigned char TByte;
 #define hpatch_kFileIOBestMaxSize  (1<<20)
-#define hpatch_kPathMaxSize  (1024*4)
+#define hpatch_kPathMaxSize  (1024*16)
     
 hpatch_inline static
 hpatch_BOOL hpatch_getIsDirName(const char* path_utf8){

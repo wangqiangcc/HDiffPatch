@@ -617,10 +617,26 @@ hpatch_BOOL TDirPatcher_close(TDirPatcher* self){
 
 const char* TDirPatcher_getOldPathByNewPath(const TDirPatcher* self,const char* newPath,
                                             char* out_pathBuf,char* out_pathBufEnd){
-    assert(out_pathBuf!=newPath);
-    if (!setPathWithRoot(out_pathBuf,out_pathBufEnd,self->_oldRootDir,self->_oldRootDir_len,
-                         newPath+self->_newDir._newRootDir_len)) return 0; //error
-    return out_pathBuf;
+    // Static buffer for interface compatibility when called without output buffer
+    static char _staticPathBuf[hpatch_kPathMaxSize];
+    char* _pathBuf = out_pathBuf ? out_pathBuf : _staticPathBuf;
+    char* _pathBufEnd = out_pathBuf ? out_pathBufEnd : (_pathBuf + hpatch_kPathMaxSize);
+    
+    assert(_pathBuf!=newPath);
+    
+    // Check if newPath starts with newRootDir
+    if (self->_newDir._newRootDir && newPath && 
+        strncmp(newPath, self->_newDir._newRootDir, self->_newDir._newRootDir_len) == 0) {
+        // newPath is a full path, extract relative path
+        const char* relativePath = newPath + self->_newDir._newRootDir_len;
+        if (!setPathWithRoot(_pathBuf,_pathBufEnd,self->_oldRootDir,self->_oldRootDir_len,
+                             relativePath)) return 0; //error
+    } else {
+        // newPath is already a relative path, use it directly
+        if (!setPathWithRoot(_pathBuf,_pathBufEnd,self->_oldRootDir,self->_oldRootDir_len,
+                             newPath)) return 0; //error
+    }
+    return _pathBuf;
 }
 
 const char* TDirPatcher_getOldPathByIndex(const TDirPatcher* self,size_t oldPathIndex,
